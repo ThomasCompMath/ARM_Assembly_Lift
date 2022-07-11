@@ -1,0 +1,233 @@
+
+
+;This is designed using the online emulator: https://cpulator.01xz.net/?sys=arm-de1soc
+
+;The following program will control the operation of an imaginary elevator, where many levels are only for ingress or egress.
+
+;setting up some memory that I want to use:
+
+	.equ ENCODER, 0x00000000							;see chart
+	.equ AUTOMATIC_INPUTS_DOOR, 0x00000004				;see chart	
+	.equ CURRENT_SWITCH_STATUS, 0x00000008				;Temporary storage for the current active switch, if any. See chart.
+	.equ LEDS, 0xff200000								;see chart
+	.equ USER_INPUTS, 0xff200040						;see chart
+
+
+.global _start
+_start:
+
+	;assume the lift starts at level 0 with the doors closed
+	;initialize position and memory (doors closed, lift on ground floor)
+	
+		LDR r0, =AUTOMATIC_INPUTS_DOOR					;doors closed
+		MOV r1, #3
+		STR r1, [r0]
+		LDR r0, =ENCODER								;encoder at 0
+		MOV r1, #0
+		STR r1, [r0]
+		LDR r0, =CURRENT_SWITCH_STATUS					;initialize switch status memory
+		STR r1, [r0]
+		LDR r0, =LEDS									;zero LED status
+		STR r1, [r0]
+	
+	;the primary loop the program sits in
+main_loop:
+		
+	Clear_registers:
+		MOV r0, #0
+		MOV r1, #0
+		MOV r2, #0
+		MOV r3, #0
+		MOV r4, #0
+		MOV r5, #0
+		MOV r6, #0
+	
+	Read_in_switches:
+		LDR r0, =USER_INPUTS
+		LDR r1, =CURRENT_SWITCH_STATUS
+		LDR r2, [r0]
+		STR r2, [r1]
+		
+	Lift_movement:										;have the current 
+		;check that door is closed
+		LDR r0, =AUTOMATIC_INPUTS_DOOR
+		LDR r1, [r0]
+		CMP r1, #3
+		BEQ doors_closed
+		B exit											;exit program if doors are not closed
+			doors_closed:
+		LDR r0, =CURRENT_SWITCH_STATUS
+		LDR r1, [r0]
+		CMP r1, #0x00000000
+		BEQ main_loop
+		CMP r1, #0x00000001
+		BEQ move_to_0
+		CMP r1, #0x00000002
+		BEQ move_to_1
+		CMP r1, #0x00000004
+		BEQ move_to_2
+		CMP r1, #0x00000008
+		BEQ move_to_3
+		CMP r1, #0x00000010
+		BEQ move_to_0
+		CMP r1, #0x00000020
+		BEQ move_to_1
+		CMP r1, #0x00000040
+		BEQ move_to_1
+		CMP r1, #0x00000080
+		BEQ move_to_2
+		CMP r1, #0x00000100
+		BEQ move_to_2
+		CMP r1, #0x00000200
+		BEQ move_to_3
+		
+			move_to_0:		
+			LDR r0, =ENCODER			
+			LDR r2, [r0]				
+			LDR r5, =LEDS				
+			look_for_0:
+				CMP r2, #0
+				BEQ floor_reached
+				MOV r6, #1
+				STR r6, [r5]
+				SUB r2, r2, #1
+				B look_for_0
+				
+			move_to_1:
+				LDR r0, =ENCODER			
+				LDR r2, [r0]				
+				LDR r5, =LEDS				
+				CMP r2, #5
+				BEQ floor_reached
+				MOV r6, #1
+				STR r6, [r5]
+				BGT down_to_1
+				BLT up_to_1
+				
+				down_to_1:
+					CMP r2, #5
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					SUB r2, r2, #1
+					STR r2, [r0]			
+					B down_to_1
+					
+				up_to_1:
+					CMP r2, #5
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					ADD r2, r2, #1
+					STR r2, [r0]			
+					B up_to_1
+				
+			move_to_2:
+				LDR r0, =ENCODER			
+				LDR r2, [r0]				
+				LDR r5, =LEDS				
+				CMP r2, #10
+				BEQ floor_reached
+				MOV r6, #1
+				STR r6, [r5]
+				BGT down_to_2
+				BLT up_to_2
+				
+				down_to_2:
+					CMP r2, #10
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					SUB r2, r2, #1
+					STR r2, [r0]			
+					B down_to_2
+					
+				up_to_2:
+					CMP r2, #10
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					ADD r2, r2, #1
+					STR r2, [r0]			
+					B up_to_2
+				
+			move_to_3:
+				LDR r0, =ENCODER			
+				LDR r2, [r0]				
+				LDR r5, =LEDS				
+				CMP r2, #15
+				BEQ floor_reached
+				MOV r6, #1
+				STR r6, [r5]
+				BGT down_to_3
+				BLT up_to_3
+				
+				down_to_3:
+					CMP r2, #15
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					SUB r2, r2, #1
+					STR r2, [r0]			
+					B down_to_3
+					
+				up_to_3:
+					CMP r2, #15
+					BEQ floor_reached
+					MOV r6, #1
+					STR r6, [r5]
+					ADD r2, r2, #1
+					STR r2, [r0]			
+					B up_to_3
+		
+			floor_reached:
+			MOV r5, #0										;LED off
+			LDR r6, =LEDS
+			STR r5, [r6]
+			STR r2, [r0]									;save ENCODER position
+			LDR r5, =LEDS									;open the doors
+			MOV r6, #6
+			STR r6, [r5]
+			LDR r0, =AUTOMATIC_INPUTS_DOOR				
+			MOV r1, #2
+			STR r1, [r0]
+			MOV r2, #0										;delay for people to exit
+			delay_timer:		
+			ADD r2, r2, #1
+			CMP r2, #5
+			BNE delay_timer
+			MOV r6, #24										;close door
+			STR r6, [r5]
+			MOV r6, #0
+			STR r6, [r5]
+			MOV r1, #3										
+			STR r1, [r0]
+
+	B main_loop
+
+		;program exited for failure
+	exit:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
